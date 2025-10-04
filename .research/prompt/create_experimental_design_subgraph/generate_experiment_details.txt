@@ -1,0 +1,104 @@
+
+Input:
+You are an AI researcher. You will conduct experiments to demonstrate the superiority of the new method described in # New Methods. Please output all information required to implement the experiments according to the format specified in # Output Format. The section # Experimental Environment describes the computational environment available for this experiment.
+
+# Experimental Environment
+NVIDIA A100
+VRAM：80GB
+RAM：2048 GB
+
+# Current Research Method (Target for Experiment Design)
+{
+    "Open Problems": "Brier / Spherical losses give better calibration and sometimes better generation quality when used for fine-tuning, but: (1) training from scratch converges slowly and final perplexity is worse than with log-likelihood, because the bounded gradient of Brier gives weak early learning signals; (2) pure log-likelihood converges fast but produces over-confident, poorly calibrated models. A minimal change that blends the strong early gradient of log-likelihood with the good late-stage calibration of Brier is still missing.",
+    "Methods": "Hybrid Log–Brier (HLB) loss: L_HLB = α(t) · CE + (1−α(t)) · Brier.\n• CE is the standard token-level cross-entropy (negative log-likelihood).\n• Brier is the token-level squared error between predicted probability and one-hot target.\n• α(t) is a simple deterministic schedule over training steps t.  A linear decay works well: α(t)=max(0,1−t/T_switch).  This keeps the loss identical to CE at the start and identical to Brier after T_switch steps.\nTheoretical intuition: in early training, model predictions are close to uniform, so CE’s unbounded gradient accelerates learning.  As predictions sharpen, α(t)→0 limits gradient magnitude and encourages calibrated probabilities.  Because both terms are strictly proper, the mixture remains strictly proper for any α∈(0,1).",
+    "Experimental Setup": "Tiny experiment that fits on a laptop GPU.\nModel: DistilGPT-2 (82 M params).\nDataset: WikiText-2 language-modeling split.\nTraining: 3 epochs, AdamW, LR 5e-4.\nBaselines: (1) CE only, (2) Brier only.  Proposed: HLB with T_switch = 50 % of total steps.\nMetrics:\n• Perplexity (lower is better) – evaluates fit.\n• Expected Calibration Error (ECE, bin=10) – evaluates probability calibration.\n• Negative Log-Likelihood (NLL) on validation set reported for completeness.",
+    "Experimental Code": "import torch, torch.nn.functional as F\n\ndef hlb_loss(logits, targets, step, total_steps, t_switch_ratio=0.5):\n    \"\"\"Hybrid Log–Brier loss with linear α schedule.\"\"\"\n    probs = F.softmax(logits, dim=-1)\n    log_probs = F.log_softmax(logits, dim=-1)\n    one_hot = F.one_hot(targets, num_classes=logits.size(-1)).float()\n\n    ce = -(log_probs * one_hot).sum(-1)          # token-wise CE\n    brier = ((probs - one_hot) ** 2).sum(-1)     # token-wise Brier\n\n    T_switch = total_steps * t_switch_ratio\n    alpha = max(0.0, 1.0 - step / T_switch) if step < T_switch else 0.0\n\n    return (alpha * ce + (1 - alpha) * brier).mean()\n\n# Example usage inside a training loop\n# for step, batch in enumerate(loader):\n#     logits = model(input_ids=batch[\"input_ids\"]).logits\n#     loss = hlb_loss(logits, batch[\"labels\"], step, total_steps)\n#     loss.backward(); optimizer.step()\n",
+    "Expected Result": "• CE baseline: lowest perplexity (~35) but high ECE (~0.12).\n• Brier baseline: highest perplexity (~46) but low ECE (~0.04).\n• HLB: perplexity close to CE (≈37) while keeping calibration close to Brier (ECE ≈0.05).\nThus HLB maintains most of the likelihood fit of CE and almost all the calibration gain of Brier.",
+    "Expected Conclusion": "A single line change that linearly blends CE with Brier during training yields models that learn as fast as CE early on but inherit the calibrated probabilities of Brier at convergence.  Because both terms are simple and differentiable, the method drops into any existing training code base with minimal effort and no additional hyper-parameters beyond an optional switch point.  This demonstrates that small, principled tweaks to the loss can simultaneously improve convergence and reliability in LLM training."
+}
+
+# MODEL LIST
+{
+    "Large Language Models": {
+        "Llama-4-Scout-17B-16E": "Llama 4, developed by Meta, is a new generation of natively multimodal AI models that leverage a Mixture-of-Experts (MoE) architecture to achieve state-of-the-art performance in both text and image understanding. Marking the beginning of a new era for the Llama ecosystem, the series introduces two models: Llama 4 Scout, a 17-billion-parameter model with 16 experts, and Llama 4 Maverick, also with 17 billion parameters but incorporating 128 experts. These auto-regressive language models employ early fusion to enable seamless multimodal processing, allowing them to integrate text and image information natively.",
+        "Llama-4-Maverick-17B-128E": "The Llama 4 collection, developed by Meta, represents a new generation of natively multimodal AI models designed to enable both text and multimodal experiences. By leveraging a Mixture-of-Experts (MoE) architecture, these models deliver industry-leading performance in understanding text and images. Marking the beginning of a new era for the Llama ecosystem, the series introduces two efficient models: Llama 4 Scout, a 17-billion-parameter model with 16 experts, and Llama 4 Maverick, also with 17 billion parameters but featuring 128 experts. Built as auto-regressive language models, the Llama 4 series incorporates early fusion to achieve seamless and native multimodality.",
+        "Qwen3-0.6B": "Qwen3-0.6B is a compact causal language model with 0.6B parameters, offering dense and MoE variants, improved reasoning, seamless mode switching, strong alignment, agent capabilities, multilingual support, and 32K context length.",
+        "Qwen3-1.7B": "Qwen3-1.7B is a next-generation causal language model with 1.7B parameters, offering dense and MoE variants, enhanced reasoning, seamless mode switching, strong alignment, agent capabilities, multilingual support, and long-context processing up to 32K tokens.",
+        "Qwen3-4B": "Qwen3 is the latest generation of large language models, featuring both dense and MoE variants with enhanced reasoning, instruction-following, agent capabilities, and multilingual support, including seamless mode switching, superior alignment, and long-context processing up to 131K tokens.",
+        "Qwen3-8B": "Qwen3-8B is an advanced causal language model with 8.2B parameters, featuring dense and MoE variants, enhanced reasoning, seamless mode switching, strong alignment, agent capabilities, multilingual support, and long-context processing up to 131K tokens.",
+        "Qwen3-14B": "Qwen3-14B is a large-scale causal language model with 14.8B parameters, offering dense and MoE variants, advanced reasoning, seamless mode switching, strong alignment, agent capabilities, multilingual support, and extended context handling up to 131K tokens.",
+        "Qwen3-32B": "Qwen3-32B is a powerful causal language model with 32.8B parameters, featuring dense and MoE variants, enhanced reasoning, seamless mode switching, strong alignment, advanced agent capabilities, multilingual support, and long-context processing up to 131K tokens.",
+        "DeepSeek-v3": "DeepSeek-V3 is a 671B-parameter MoE language model (37B active per token) featuring MLA and DeepSeekMoE architectures, auxiliary-loss-free load balancing, and multi-token prediction, trained on 14.8T tokens with efficient GPU usage, achieving performance comparable to top closed-source models while maintaining stable training.",
+        "DeepSeek-V3.1": "DeepSeek-V3.1 extends DeepSeek-V3 with larger long-context training (630B tokens at 32K and 209B tokens at 128K) and adopts FP8 data formats for efficiency and compatibility.",
+        "DeepSeek-V3.2-Exp": "DeepSeek-V3.2-Exp, built on V3.1-Terminus, introduces Sparse Attention to improve training and inference efficiency for long-context processing as part of ongoing research into more efficient transformer architectures.",
+        "gpt-oss-20b": "The gpt-oss series, introduced by OpenAI, consists of open-weight models designed to support powerful reasoning, agentic tasks, and a wide range of developer use cases. Two versions are being released: gpt-oss-120b, a 117-billion-parameter model with 5.1 billion active parameters optimized for production-level, general-purpose, high-reasoning tasks that can fit into a single 80GB GPU such as the NVIDIA H100 or AMD MI300X; and gpt-oss-20b, a 21-billion-parameter model with 3.6 billion active parameters intended for lower latency, as well as local or specialized applications. Both models were trained using OpenAI’s harmony response format and must be used with this format to function correctly.",
+        "gemma-3-1b-it": "Gemma is a family of lightweight open models from Google, built on the same research as Gemini. The latest Gemma 3 models are multimodal, supporting both text and image inputs with text generation outputs. They feature a 128K context window (32K for the 1B model), multilingual support in over 140 languages, and come in multiple sizes, making them suitable for tasks such as question answering, summarization, reasoning, and image understanding. Their smaller size allows deployment on laptops, desktops, or personal cloud infrastructure, broadening access to advanced AI. Inputs include text and images normalized to 896×896 resolution, while outputs are generated text with up to 8192 tokens of context.",
+        "gemma-3-4b-it": "Gemma is a family of lightweight open models from Google, built on the same research behind the Gemini models. The latest Gemma 3 models are multimodal, capable of processing both text and images as input and generating text as output, with open weights for pre-trained and instruction-tuned variants. They offer a 128K context window (32K for the 1B model), support over 140 languages, and come in more sizes than earlier versions, making them suitable for tasks like question answering, summarization, reasoning, and image understanding. Thanks to their smaller size, Gemma models can run on laptops, desktops, or personal cloud setups, expanding access to advanced AI. Inputs include text and images (normalized to 896×896 and encoded to 256 tokens each), while outputs are generated text with up to 8192 tokens.",
+        "gemma-3-27b-it": "Gemma is a family of lightweight open models from Google, built on the same research as the Gemini models. The Gemma 3 series is multimodal, able to take both text and image inputs and generate text outputs, with open weights available for both pre-trained and instruction-tuned versions. They feature a 128K context window (32K for the 1B model), multilingual support in more than 140 languages, and come in a wider range of sizes than previous releases. Well-suited for tasks such as question answering, summarization, reasoning, and image understanding, Gemma models are compact enough to run on laptops, desktops, or personal cloud setups, making advanced AI more broadly accessible. Inputs include text strings or images normalized to 896×896 and encoded into 256 tokens each, while outputs are generated text of up to 8192 tokens."
+    },
+    "Vision Language Models": {},
+    "Vision Language Action Models": {},
+    "Diffusion Models": {}
+}
+
+# DATASET LIST
+{
+    "Text Datasets": {
+        "alpaca-cleaned": "",
+        "databricks-dolly-15k": ""
+    },
+    "Image Datasets": {
+        "ImageNet": "",
+        "CIFAR-10": ""
+    }
+}
+
+# Output Format
+- experiment_summary：
+  - Describe the overall implementation details of the experiment. Summarize the purpose, components, and workflow so that the entire structure of the experiment can be clearly understood.
+- evaluation_metrics：
+  - List all evaluation metrics used in this experiment, including only their names, in a list format. (e.g., Accuracy AUC ROC, F1 Score, RMSE, BLEU, ROUGE, etc.)
+- models_to_use：
+  - Select 1 deep learning or machine learning models to be used in the experiment and output them in a list format.
+  - Each model name should clearly indicate its number of parameters.
+  - Refer to the provided “# MODEL LIST” for guidance, although models not included in the list are also acceptable.
+  - If the proposed method itself introduces a new model (e.g., a novel architecture), return an empty list and describe the details of the method in new_method.
+- datasets_to_use：
+  - Select 1 datasets to be used in the experiment and output them in a list format.
+  - Refer to the provided “# DATASET LIST” for guidance, although datasets not included in the list are also acceptable.
+  - If a new dataset is proposed as part of this study, return an empty list and describe its details in new_method.
+- new_method：
+  - Describe the proposed method and its implementation in detail.
+  - Clearly state its objectives, theoretical background, components, and algorithmic procedures.
+- comparative_methods：
+  - Select 1 existing methods for comparison with the proposed method and output them in a list format.
+  - For example, if the proposed method is a new optimization algorithm, comparative methods might include Adam or AdamW.
+  - If the proposal is a new LLM architecture, comparative methods might include Llama 4 or Qwen.
+- hyperparameters_to_search：
+  - List all hyperparameters to be explored, including only their names, in a list format.
+Output:
+{
+    "experiment_summary": "Purpose: Evaluate the Hybrid Log–Brier (HLB) loss, which linearly blends cross-entropy (CE) with Brier loss, against pure CE and pure Brier when training a causal language model from scratch.  \n\nComponents: \n1. Model – Qwen3-0.6B (≈600 M dense parameters).  \n2. Dataset – WikiText-2 (train/valid/test splits).  \n3. Losses – (a) HLB (proposed), (b) CE, (c) Brier.  \n4. Training – AdamW optimiser; global batch-size 512, 3 epochs, 2 048-token sequence length, cosine LR schedule with warm-up.  \n5. Hyperparameter search – switching ratio T_switch/T_total, learning-rate, weight-decay, label-smoothing for CE baseline.  \n6. Metrics – Perplexity, Negative Log-Likelihood (NLL), and Expected Calibration Error (ECE, 10 equal-mass bins) computed on the validation set every epoch.  \n\nWorkflow: \nStep 1 Pre-process WikiText-2 with model’s tokenizer, create 2 048-token contiguous blocks.\nStep 2 For each loss variant, initialise Qwen3-0.6B from random weights and train for 3 epochs under identical optimisation settings except for the loss definition.\nStep 3 For HLB, compute α(t)=max(0,1–t/T_switch) with T_switch searched in {0.25, 0.5, 0.75} of total steps.\nStep 4 Log training/validation loss every 100 steps.\nStep 5 After each epoch, evaluate perplexity, NLL, and ECE on the validation split and save checkpoints.\nStep 6 After training, pick the checkpoint with best validation perplexity for each method and report metrics on the held-out test split.\nStep 7 Analyse trade-off curves (ECE vs. perplexity) to demonstrate HLB’s superior balance between fit and calibration.",
+    "evaluation_metrics": [
+        "Perplexity",
+        "Expected Calibration Error",
+        "Negative Log-Likelihood"
+    ],
+    "models_to_use": [
+        "Qwen3-0.6B"
+    ],
+    "datasets_to_use": [
+        "WikiText-2"
+    ],
+    "new_method": "Hybrid Log–Brier (HLB) Loss\nObjective: Combine fast, strong gradients of cross-entropy early in training with the bounded, calibration-friendly gradients of Brier loss late in training.\nDefinition: L_HLB = α(t)·CE + (1−α(t))·Brier, where α(t)=max(0,1−t/T_switch) linearly decays from 1 to 0 over the first T_switch optimisation steps.\nAlgorithmic Procedure:\n1. Forward pass → logits ∈ℝ^{B×L×V}.  \n2. Compute probabilities p = softmax(logits); log-probs ℓ = log_softmax(logits).  \n3. Build one-hot target vectors y.  \n4. CE = −Σ_v y_v ℓ_v ; Brier = Σ_v (p_v–y_v)^2.  \n5. Determine α(t) from current global step t and preset T_switch.  \n6. Return mean loss L = α·CE + (1−α)·Brier.\nImplementation is a drop-in replacement for the usual CE loss; only requires passing the current step and total training steps (or T_switch) to the loss function.",
+    "comparative_methods": [
+        "Cross-Entropy (CE) Loss"
+    ],
+    "hyperparameters_to_search": [
+        "learning_rate",
+        "weight_decay",
+        "batch_size",
+        "t_switch_ratio",
+        "label_smoothing"
+    ]
+}
