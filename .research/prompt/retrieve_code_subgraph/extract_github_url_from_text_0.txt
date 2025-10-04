@@ -1,0 +1,17 @@
+
+Input:
+# Task
+You carefully read the contents of the “Paper Outline” and select one GitHub link from the “GitHub URLs List” that you think is most relevant to the contents.
+# Constraints
+- Output the index number corresponding to the selected GitHub URL.
+- Be sure to select only one GitHub URL.
+- If there is no related GitHub link, output None.
+# Paper Outline
+The core methodology is an LLM-driven objective discovery pipeline. It iteratively prompts a large language model (GPT-4) to propose and implement new Python code for preference optimization loss functions. The LLM is initialized with established loss functions and their performance, then receives feedback on the performance (MT-Bench scores) of its proposed functions to refine its generation strategy. Each proposed function undergoes unit tests, and if valid, an LLM is fine-tuned and evaluated. The best-performing discovered algorithm, DiscoPOP (Log Ratio Modulated Loss, LRML), dynamically combines logistic and exponential losses, with weights determined by a sigmoid calculation of the difference in log-ratios (flrml(βρ) = (1− σ(βρ/τ )) · fdpo(βρ) +σ(βρ/τ ) · fexp(−βρ)).
+
+# GitHub URLs List
+['https://github.com/luchris429/DiscoPOP', 'https://github.com/tatsu-lab/alpaca_eval', 'https://github.com/tatsu-lab/alpaca_eval', 'https://github.com/vanderschaarlab/DiscoPOP', 'https://github.com/lm-sys/FastChat', 'https://github.com/tatsu-lab/alpaca_eval']
+Output:
+{
+    "index": 0
+}
